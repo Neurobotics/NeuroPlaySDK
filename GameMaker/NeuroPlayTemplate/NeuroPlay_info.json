@@ -1,0 +1,4 @@
+{
+  "Description": "A basic template to integrate NeuroPlay EEG headsets through http-requests to NeuroPlayPro software",
+  "ProjectFlags": 0
+}
