@@ -67,7 +67,7 @@ static void dataNotifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic
     s3 = *(lastData++);
     s2 = *(lastData++);
     s1 = *(lastData++);
-    d1 = (long(s1) << 16) + (long(s2) << 8) + s3;
+    d1 = (long(s3) << 24) + (long(s2) << 16) + (long(s1) << 8);
     Serial.println(String(d1 / 5369));
     break;    
   }
