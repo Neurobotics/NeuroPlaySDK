@@ -63,11 +63,25 @@ class NeuroPlay:
     def set_mode(self, mode):
         self.mode = mode
 
-    def start_record(self, start=True, path = ''):
+    def start_record(self, start=True, path=""):
         if start:
-            requests.get(self.url + "startRecord?path=" + path)
+            return requests.get(self.url + "startRecord?path=" + path)
         else:
-            requests.get(self.url + "stopRecord")
+            return requests.get(self.url + "stopRecord")
 
     def stop_record(self):
-        self.stopRecord(False)
+        return requests.get(self.url + "stopRecord")
+    
+    def add_edf_annotation(
+        self, text: str, duration: int = 50, pos: int = time.time() * 1000
+    ):
+        requests.get(
+            f"{self.url}addEDFAnnotation?text={text}&duration={duration}&pos={pos}"
+        )
+
+    def grab_raw_data(self):
+        requests.get(f"{self.url}grabRawData").json()
+
+    def enable_data_grab(self):
+        requests.get(f"{self.url}enableDataGrabMode")
+
