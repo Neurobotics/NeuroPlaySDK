@@ -47,6 +47,8 @@ static uint8_t notificationOff[] = {0x00, 0x00};
 BLEScan* pBLEScan = nullptr;
 bool ble_inited = false;
 
+static int packetCounter = 0;
+
 struct Packet {
   uint8_t data[100];
   uint8_t len = 0;
@@ -80,6 +82,7 @@ static void dataNotifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic
   memcpy(&p.data, pData, length);
   packets.enqueue(p);
   lastPacketTime = millis();  
+  packetCounter++;
 }
 
 void stopDevice() {
@@ -279,7 +282,20 @@ long sample[valuesInSample];
 
 static String NEUROPLAY6_CHANNELS[] = { "", "Fp1", "T3", "O1", "O2", "", "T4", "Fp2", "" };
 
+static long packetCounterTs = 0;
+
 void loop() {
+  if (packetCounterTs == 0) packetCounterTs = millis();
+  if ((millis() - packetCounterTs) >= 1000) {
+    if (packetCounter > 0) {
+      Serial.print("{packets=");
+      Serial.print(String(packetCounter));
+      Serial.println("}");
+    }
+    packetCounter = 0;
+    packetCounterTs = millis();
+  }
+
   if (Serial.available() > 0) {
     String cmd;
     while (Serial.available() > 0) {
