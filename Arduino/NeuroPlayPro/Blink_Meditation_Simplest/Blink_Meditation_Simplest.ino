@@ -31,9 +31,6 @@ const int SERVO_MIN_VALUE = 1000;
 const int SERVO_MAX_VALUE = 1800;
 Servo servo1;
 
-// Incoming message container
-String message = "";
-
 void setup() {
   Serial.begin(115200);
 
@@ -59,7 +56,8 @@ void loop() {
     // Activate the LED if meditation is above 50%
     digitalWrite(LED_BUILTIN, meditation > 50 ? HIGH : LOW);
 
-    int pulse = SERVO_MIN_VALUE + 100 * (SERVO_MAX_VALUE - SERVO_MIN_VALUE) / (100 - meditation);
+    int pulse = SERVO_MIN_VALUE;
+    if (meditation != 0) pulse += 100 * (SERVO_MAX_VALUE - SERVO_MIN_VALUE) / (meditation);
     // Activate the servo
     if (servo1.attached()) servo1.writeMicroseconds(pulse);
   }   
