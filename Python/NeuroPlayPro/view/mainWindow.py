@@ -28,7 +28,8 @@ class MainWindow(QtWidgets.QMainWindow):
             {"BCI":"bci"},
             {"Rhythms":"rhythms"},
             {"Spectrum":"lastspectrum"},
-            {"Data":"grabFilteredData"}
+            {"Data":"grabFilteredData"},
+            {"RawData":"grabRawData"}
         ]
 
         for mode in modes:
