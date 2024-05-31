@@ -1,6 +1,6 @@
 import requests
 from model.repeatTimer import RepeatTimer
-
+import time
 
 class NeuroPlay:
     url = "http://127.0.0.1:2336/"
@@ -35,6 +35,7 @@ class NeuroPlay:
     def on_timer(self):
         try:
             data = requests.get(self.url + self.mode)
+            
             if data.ok:
                 response = data.json()
                 self.set_connected(self, True)
@@ -47,9 +48,9 @@ class NeuroPlay:
                               if len(self.onRhythmsReceived) > 0:
                                 for callback in self.onRhythmsReceived:
                                     callback(rhythms)
-                    elif 'error' in response:
-                        if 'enableDataGrabMode' in response['error']:
-                            requests.get(self.url + "enableDataGrabMode")
+                elif 'error' in response:
+                    if 'enableDataGrabMode' in response['error']:
+                        requests.get(self.url + "enableDataGrabMode")
         except requests.exceptions.RequestException as e:  # This is the correct syntax
             self.set_connected(self, False)
 
