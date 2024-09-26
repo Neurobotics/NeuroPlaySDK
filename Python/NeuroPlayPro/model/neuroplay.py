@@ -24,6 +24,7 @@ class NeuroPlay:
         if data.ok:
             response = data.json()
             return response
+        return {}
         
 
     def set_connected(self, connected):
