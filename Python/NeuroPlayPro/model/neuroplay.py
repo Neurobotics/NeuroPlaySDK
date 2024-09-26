@@ -17,7 +17,14 @@ class NeuroPlay:
     onDisconnected = []
     onResponse = []
 
-    mode = "bci"
+    mode = "bci"  
+
+    def get (self, cmd): 
+        data = requests.get(self.url + cmd)
+        if data.ok:
+            response = data.json()
+            return response
+        
 
     def set_connected(self, connected):
         if self.isConnected != connected:
