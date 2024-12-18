@@ -3,7 +3,7 @@ from classes.BleConnector import BleConnector
 import asyncio
 import numpy as np
 from PySide6 import QtAsyncio
-from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QComboBox, QVBoxLayout, QHBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QComboBox, QVBoxLayout, QHBoxLayout, QWidget, QSpinBox
 from PySide6.QtCore import QTimer
 import pyqtgraph as pg
 
@@ -30,6 +30,13 @@ class MainWindow(QMainWindow):
         self.samples = []
 
         self.maxTime = 10
+
+        self.spinSeconds = QSpinBox()
+        self.spinSeconds.setRange(1, 100)
+        self.spinSeconds.setValue(self.maxTime)
+        self.spinSeconds.setSuffix('s')
+        self.spinSeconds.valueChanged.connect(self.change_horizontal_scale)
+        
         self.dataIndex = 0
 
         self.btnConnect.clicked.connect(lambda: asyncio.ensure_future(self.handle_connect()))
@@ -40,6 +47,7 @@ class MainWindow(QMainWindow):
         topRow.addWidget(self.comboDevices)
         topRow.addWidget(self.btnConnect)
         topRow.addStretch(1)
+        topRow.addWidget(self.spinSeconds)
 
         centralWidget = QWidget()
         mainLayout = QVBoxLayout(centralWidget)
@@ -48,9 +56,10 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(centralWidget)
 
-        timerPlot = QTimer(self)
-        timerPlot.timeout.connect(self.on_plot_timeout)
-        timerPlot.start(50)
+        self.timerPlot = QTimer(self)
+        self.timerPlot.timeout.connect(self.on_plot_timeout)
+        self.timerPlot.interval = 50
+        self.timerPlot.start()
 
     async def handle_connect(self):   
         print('Handle connect', self.btnConnect.isChecked())     
@@ -79,12 +88,19 @@ class MainWindow(QMainWindow):
         else:
             await self.connector.stop_search()
 
+    def change_horizontal_scale(self):
+        self.timerPlot.stop()
+        self.maxTime = int(self.spinSeconds.value())
+        self.dataIndex = 0
+        self.samples = []
+        self.timerPlot.start()
+
     def on_plot_timeout(self):        
         n = len(self.plotters)
         m = len(self.samples)
         if n > 0 and n == m:
             for i in range(n):
-                self.plots[i].setData(y=self.samples[i])
+                self.plots[i].setData(x=self.timeX, y=self.samples[i])
 
     def on_device_found(self, deviceName):
         self.comboDevices.addItem(deviceName)
@@ -92,13 +108,28 @@ class MainWindow(QMainWindow):
     def on_device_data(self, data):       
         n = len(data)
         if len(self.samples) != n:
+            for plot in self.plotters:
+                plot.setVisible(False)
+                plot.setParent(None)
+                plot.deleteLater()
+
+            self.plotters.clear()
+            self.plots.clear()
+
             self.frequency = self.connector.currentDevice.samplingRate
             self.sampleCount = self.maxTime * self.frequency
             self.samples = np.zeros((n, self.sampleCount))
 
+            msPerSample = 1.0 / self.frequency
+            timeX = []
+            for i in range(self.sampleCount):
+                timeX.append(i * msPerSample)
+            
+            self.timeX = timeX
+
             for i in range(n):    
                 plot = pg.PlotWidget()
-                p = plot.plot(x=self.samples[i], pen=(i,n))
+                p = plot.plot(x=self.timeX, y=self.samples[i], pen=(i,n))
                 plot.setYRange(-100, 100)
                 text_label = pg.TextItem(self.connector.currentDevice.channelNames[i])
                 plot.addItem(text_label)
