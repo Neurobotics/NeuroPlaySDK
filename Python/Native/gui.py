@@ -30,13 +30,22 @@ class MainWindow(QMainWindow):
         self.samples = []
 
         self.maxTime = 10
+        self.verticalScaleUV = 100
 
         self.spinSeconds = QSpinBox()
         self.spinSeconds.setRange(1, 100)
         self.spinSeconds.setValue(self.maxTime)
         self.spinSeconds.setSuffix('s')
         self.spinSeconds.valueChanged.connect(self.change_horizontal_scale)
-        
+
+        self.spinScale = QSpinBox()
+        self.spinScale.setRange(10, 1000)
+        self.spinScale.setValue(self.verticalScaleUV)
+        self.spinScale.setSingleStep(10)
+        self.spinScale.setSuffix('uV')
+        self.spinScale.setPrefix('±')
+        self.spinScale.valueChanged.connect(self.change_vertical_scale)
+
         self.dataIndex = 0
 
         self.btnConnect.clicked.connect(lambda: asyncio.ensure_future(self.handle_connect()))
@@ -48,6 +57,7 @@ class MainWindow(QMainWindow):
         topRow.addWidget(self.btnConnect)
         topRow.addStretch(1)
         topRow.addWidget(self.spinSeconds)
+        topRow.addWidget(self.spinScale)
 
         centralWidget = QWidget()
         mainLayout = QVBoxLayout(centralWidget)
@@ -95,6 +105,11 @@ class MainWindow(QMainWindow):
         self.samples = []
         self.timerPlot.start()
 
+    def change_vertical_scale(self):
+        self.verticalScaleUV = int(self.spinScale.value())
+        for plot in self.plotters:
+            plot.setYRange(-self.verticalScaleUV, self.verticalScaleUV)
+
     def on_plot_timeout(self):        
         n = len(self.plotters)
         m = len(self.samples)
@@ -130,7 +145,7 @@ class MainWindow(QMainWindow):
             for i in range(n):    
                 plot = pg.PlotWidget()
                 p = plot.plot(x=self.timeX, y=self.samples[i], pen=(i,n))
-                plot.setYRange(-100, 100)
+                plot.setYRange(-self.verticalScaleUV, self.verticalScaleUV)
                 text_label = pg.TextItem(self.connector.currentDevice.channelNames[i])
                 plot.addItem(text_label)
                 self.plots.append(p)
