@@ -54,8 +54,7 @@ class NeuroPlayDevice (AbstractDevice) :
 
     def parsePacket(self, packet):
         self.packets.append(packet)
-        if len(self.packets) == NEUROPLAY_QUEUE_SIZE:
-            
+        if len(self.packets) == NEUROPLAY_QUEUE_SIZE:            
             if self.packets[0][0] & 0x03 != 0:  #Check packet id             
                 self.packets.pop(0)
                 return
