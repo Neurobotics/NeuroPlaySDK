@@ -1,5 +1,6 @@
 from bleak import BleakScanner
 from classes.NeuroPlayDevice import NeuroPlayDevice
+from classes.EMGsensDevice import EMGsensDevice
 
 class BleConnector:
     def __init__(self):
@@ -62,15 +63,24 @@ class BleConnector:
             if self.canSearch == False:
                 return
             name = (ad.local_name or "")
-            if name not in self.foundDevices:                
+            if name not in self.foundDevices:  
+                validName = False              
                 if BleConnector.multiStartsWith(name, NeuroPlayDevice.devicesNames()): 
+                    np = NeuroPlayDevice(name, bd.address)
+                    print('add np', name, NeuroPlayDevice.devicesNames())
+                    self.devices.append(np)
+                    validName = True
+                elif BleConnector.multiStartsWith(name, EMGsensDevice.devicesNames()):
+                    emg = EMGsensDevice(name, bd.address)
+                    self.devices.append(emg)
+                    print('add emg', name, EMGsensDevice.devicesNames())
+                    validName = True
+                    
+                if validName == True:
                     print(f"> Found {name}")
                     self.foundDevices.append(name)
                     if self.callbackFound:
                         self.callbackFound(name)
-
-                    np = NeuroPlayDevice(name, bd.address)
-                    self.devices.append(np)
 
                     if self.connectTo == name:
                         await self.connect_device()

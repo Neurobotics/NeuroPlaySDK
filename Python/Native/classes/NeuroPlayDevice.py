@@ -1,11 +1,10 @@
 from classes.AbstractDevice import AbstractDevice
-from classes.Filter import ContinuousFilter, ContinuousNotchFilter
 
 MAGIC_MICROVOLTS_BIT = 0.000186265
 NEUROPLAY_QUEUE_SIZE = 4
 NEUROPLAY_PACKET_SIZE = 20
 
-def bytes_to_signed_int(bytes, byteorder = 'big'):
+def bytes_to_signed_int24(bytes, byteorder = 'big'):
     num = int.from_bytes(bytes, byteorder)    
     # Check if the most significant bit is set (indicating a negative number)
     if (bytes[0] & 0x80) != 0: # for big-endian
@@ -16,6 +15,7 @@ def bytes_to_signed_int(bytes, byteorder = 'big'):
 class NeuroPlayDevice (AbstractDevice) :
     def __init__(self, bleName, bleAddress) :
         super().__init__()
+
         self.name = bleName
         self.address = bleAddress
         self.dataServiceUUID = "f0001298-0451-4000-b000-000000000000"
@@ -23,36 +23,21 @@ class NeuroPlayDevice (AbstractDevice) :
         self.dataControlUUID = "f000129a-0451-4000-b000-000000000000"
         self.samplingRate = 125
         self.packets = []
-
-        # NeuroPlay-8Cap
-        if "8Cap" in bleName: 
+        
+        if "8Cap" in bleName: # NeuroPlay-8Cap 
             self.channelNames = ["O1", "P3", "C3", "F3", "F4", "C4", "P4", "O2"]
-            self.channels = 8
-        # NeuroPlay-6C
-        else: 
+        else: # NeuroPlay-6C
             self.channelNames = ["O1", "T3", "Fp1", "Fp2", "T4", "O2"]
-            self.channels = 6
 
-        self.filters = []
-        for i in range(self.channels):
-            self.filters.append((ContinuousFilter(2, self.samplingRate, 'high'),
-                                 ContinuousFilter(40, self.samplingRate, 'low'),
-                                 ContinuousNotchFilter(50, self.samplingRate)))
+        self.channels = len(self.channelNames)
+        self.addFilters(2, 40, 50)
 
     @staticmethod
     def devicesNames():
-        return ("NeuroPlay")    
+        return ["NeuroPlay"]
 
-    def emitSample(self, channelWiseSamples, callback):
-        if not callback: return
-        n = len(channelWiseSamples)            
-        for i in range(3):
-            sample = []
-            for ch in range(n):
-                sample.append(channelWiseSamples[ch][i])
-            callback(sample)
-
-    def parsePacket(self, packet):
+    def parsePacket(self, packet: bytearray):
+        if len(packet) != NEUROPLAY_PACKET_SIZE: return
         self.packets.append(packet)
         if len(self.packets) == NEUROPLAY_QUEUE_SIZE:            
             if self.packets[0][0] & 0x03 != 0:  #Check packet id             
@@ -64,9 +49,8 @@ class NeuroPlayDevice (AbstractDevice) :
                 p = self.packets[i]
                 for j in range(6): # 6 samples per 18 bytes
                     off = 2 + j * 3                    
-                    v = bytes_to_signed_int(bytes([p[off], p[off+1], p[off+2], 0x00]), 'big') * MAGIC_MICROVOLTS_BIT                  
-                    meta.append(v)
-
+                    v = bytes_to_signed_int24(bytes([p[off], p[off+1], p[off+2], 0x00]), 'big') 
+                    meta.append(v * MAGIC_MICROVOLTS_BIT)
 
             channelWiseData = []            
             channelWiseData.append([ meta[0 + 0], meta[0 + 8], meta[0 + 16]])
@@ -82,22 +66,7 @@ class NeuroPlayDevice (AbstractDevice) :
                 channelWiseData.pop(6)
                 channelWiseData.pop(1)
 
-            if self.dataCallback: self.emitSample(channelWiseData, self.dataCallback)                           
-                        
-            if self.filteredDataCallback:
-                filteredData = []
-                index = 0
-                for ff in self.filters:
-                    channelData = channelWiseData[index]
-                    for f in ff:
-                        filtered = []
-                        for i in range(3):
-                            filtered.append(f.apply_filter(channelData[i]))
-                        channelData = filtered
-                    filteredData.append(channelData)
-                    index += 1
-                self.emitSample(filteredData, self.filteredDataCallback) 
+            self.processSamples(channelWiseData)
 
-                
             self.packets.clear()
 
