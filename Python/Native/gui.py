@@ -12,25 +12,33 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("NeuroPlay SDK Window")  
 
+        self.samples = []
+        self.maxTime = 10
+        self.verticalScaleUV = 100
+        self.dataIndex = 0
+
         self.connector = BleConnector()
         self.connector.callbackFound = self.on_device_found 
         self.connector.callbackData = self.on_device_data
 
         self.comboDevices = QComboBox()
-        self.comboDevices.setMinimumWidth(200)
+        self.comboDevices.setMinimumWidth(160)
 
-        self.btnRefreshDevices = QPushButton("Search")
-        self.btnRefreshDevices.setCheckable(True)
+        self.btnSearchDevices = QPushButton("Search")
+        self.btnSearchDevices.setCheckable(True)
+        self.btnSearchDevices.clicked.connect(lambda: asyncio.ensure_future(self.handle_search()))
+
         self.btnConnect = QPushButton("Connect")
         self.btnConnect.setCheckable(True)
+        self.btnConnect.clicked.connect(lambda: asyncio.ensure_future(self.handle_connect()))
 
-        self.plottersLayout = QVBoxLayout()
+        plottersHolder = QWidget()
+        plottersHolder.setMinimumSize(200, 200)
+        plottersHolder.setContentsMargins(0, 0, 0, 0)
+        self.plottersLayout = QVBoxLayout(plottersHolder)
+        self.plottersLayout.setContentsMargins(8, 8, 8, 8)
         self.plotters = []
         self.plots = []
-        self.samples = []
-
-        self.maxTime = 10
-        self.verticalScaleUV = 100
 
         self.spinSeconds = QSpinBox()
         self.spinSeconds.setRange(1, 100)
@@ -44,25 +52,24 @@ class MainWindow(QMainWindow):
         self.spinScale.setSingleStep(10)
         self.spinScale.setSuffix('uV')
         self.spinScale.setPrefix('±')
-        self.spinScale.valueChanged.connect(self.change_vertical_scale)
-
-        self.dataIndex = 0
-
-        self.btnConnect.clicked.connect(lambda: asyncio.ensure_future(self.handle_connect()))
-        self.btnRefreshDevices.clicked.connect(lambda: asyncio.ensure_future(self.handle_search()))
+        self.spinScale.valueChanged.connect(self.change_vertical_scale)    
 
         topRow = QHBoxLayout()
-        topRow.addWidget(self.btnRefreshDevices)
+        topRow.setContentsMargins(8, 8, 8, 0)
+        topRow.addWidget(self.btnSearchDevices)
         topRow.addWidget(self.comboDevices)
         topRow.addWidget(self.btnConnect)
         topRow.addStretch(1)
+        topRow.addSpacing(10)
         topRow.addWidget(self.spinSeconds)
         topRow.addWidget(self.spinScale)
 
         centralWidget = QWidget()
         mainLayout = QVBoxLayout(centralWidget)
+        mainLayout.setContentsMargins(0, 0, 0, 0)
+        mainLayout.setSpacing(0)
         mainLayout.addLayout(topRow, 0)
-        mainLayout.addLayout(self.plottersLayout, 100)
+        mainLayout.addWidget(plottersHolder, 100)
 
         self.setCentralWidget(centralWidget)
 
@@ -74,8 +81,8 @@ class MainWindow(QMainWindow):
     async def handle_connect(self):   
         print('Handle connect', self.btnConnect.isChecked())     
         if self.btnConnect.isChecked():
-            if self.btnRefreshDevices.isChecked():
-                self.btnRefreshDevices.setChecked(False)
+            if self.btnSearchDevices.isChecked():
+                self.btnSearchDevices.setChecked(False)
                 await self.handle_search()
             npName = self.comboDevices.currentText()
             if npName != "":
@@ -84,10 +91,13 @@ class MainWindow(QMainWindow):
         else:
             await self.connector.disconnect_device()
        
+    def startSearch(self):
+        self.btnSearchDevices.isChecked = True
+        self.btnSearchDevices.click()
 
     async def handle_search(self):
-        print("Handle search", self.btnRefreshDevices.isChecked())
-        if self.btnRefreshDevices.isChecked():
+        print("Handle search", self.btnSearchDevices.isChecked())
+        if self.btnSearchDevices.isChecked():
             if self.btnConnect.isChecked():
                 self.btnConnect.setChecked(False)
                 await self.handle_connect()
@@ -157,12 +167,11 @@ class MainWindow(QMainWindow):
 
         self.dataIndex += 1
         if self.dataIndex >= self.sampleCount:
-            self.dataIndex = 1
+            self.dataIndex = 0
 
 
 if __name__ == "__main__":
     app = QApplication([])
     main_window = MainWindow()
     main_window.show()
-
     QtAsyncio.run()
