@@ -4,7 +4,7 @@ from classes.SpectumCalc import SpectrumCalc
 import asyncio
 import numpy as np
 from PySide6 import QtAsyncio
-from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QComboBox, QVBoxLayout, QHBoxLayout, QWidget, QSpinBox
+from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QComboBox, QVBoxLayout, QHBoxLayout, QWidget, QSpinBox, QLabel
 from PySide6.QtCore import QTimer
 import pyqtgraph as pg
 
@@ -50,9 +50,19 @@ class MainWindow(QMainWindow):
         self.spectrumPlots = []
         self.spectrums = []
 
+        rhythmsHolder = QWidget()
+        rhythmsHolder.setMinimumSize(200, 200)
+        rhythmsHolder.setContentsMargins(0, 0, 0, 0)
+        self.rhythmsLayout = QVBoxLayout(rhythmsHolder)
+        self.rhythmsLayout.setContentsMargins(8, 8, 8, 8)
+        self.rhythmsPlotters = []
+        self.rhythmsPlots = []
+        self.rhythms = []
+
         graphicsHolder = QHBoxLayout()
         graphicsHolder.addWidget(plottersHolder, 100)
         graphicsHolder.addWidget(spectrumsHolder, 50)
+        graphicsHolder.addWidget(rhythmsHolder, 0)
 
         self.spinSeconds = QSpinBox()
         self.spinSeconds.setRange(1, 100)
@@ -144,8 +154,10 @@ class MainWindow(QMainWindow):
     def on_device_found(self, deviceName):
         self.comboDevices.addItem(deviceName)
 
-    def on_spectrum_data(self, index, data):
+    def on_spectrum_data(self, index, data, rhythms):
         self.spectrumPlots[index].setData(x=self.spectrums[index].frequencies, y=data)
+        t = "δ (0.5-4 Hz)=" + str(int(rhythms[0])) + "%<br>θ &nbsp;&nbsp;(4-8 Hz)=" + str(int(rhythms[1])) + "%<br>α &nbsp;(8-14 Hz)=" + str(int(rhythms[2])) + "%<br>β (14-35 Hz)=" + str(int(rhythms[3])) + "%<br>δ (35-50 Hz)=" + str(int(rhythms[4])) + "%<br>"
+        self.rhythmsPlots[index].setText(t)
 
     def on_device_data(self, data):       
         n = len(data)
@@ -192,6 +204,11 @@ class MainWindow(QMainWindow):
 
                 spec.callback = self.on_spectrum_data
 
+                label = QLabel("?<br>?<br>?<br>?<br>?")
+                label.setStyleSheet("font-family: 'Courier New', monospace")
+
+                self.rhythmsLayout.addWidget(label)
+                self.rhythmsPlots.append(label)
 
         
         for i in range(n):
