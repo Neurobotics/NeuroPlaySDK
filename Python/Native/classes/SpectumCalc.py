@@ -9,41 +9,30 @@ class SpectrumCalc :
     self.samplingRate = 125 # Hz
     self.data = [] # type: ignore
     self.index = 0
-    self.callback =  None
+    self.callback = None
 
-    N = self.window * self.samplingRate
-    T = 1.0 / self.samplingRate
+    self.N = self.window * self.samplingRate
+    self.T = 1.0 / self.samplingRate
 
-    self.N = N
-    self.T = T
+    self.frequencies = fftfreq(self.N, self.T)[:self.N//2]
 
-    self.timeX = fftfreq(N, T)[:N//2]
+    self.L = len(self.frequencies)
 
     self.spectrum = []
-    for i in range(len(self.timeX)):
+    for i in range(self.L):
       self.spectrum.append(0)
 
-    # self.timeX = []
-    # msPerSample = 1.0 / self.samplingRate
-    # for i in range(self.window * self.samplingRate):
-    #   self.timeX.append(i * msPerSample)
-
-    print(self.spectrum)
-    print(self.timeX)
+    self.hann = np.hanning(self.N)  
 
   def addData(self, sample):
     self.data.append(sample)
-    # print("Spec len", self.index, len(self.data))
     if len(self.data) >= (self.samplingRate * self.window) :
-      print("spectum reached", self.index)
+      signal = []
+      for i in range(self.N):
+        signal.append(self.data[i])
 
-      original_spectrum = fft(self.data)
-      self.spectrum = 2.0/self.N * np.abs(original_spectrum[0:self.N//2]) # "реальные" значения спектра
-
-      print(self.spectrum)
-
-      # for i in range(len(self.data)):
-      #   self.spectrum[i] = self.data[i]
+      original_spectrum = fft(signal * self.hann)
+      self.spectrum = 2.0/self.N * np.abs(original_spectrum[0:self.N//2])
 
       if self.callback:
         self.callback(self.index, self.spectrum)

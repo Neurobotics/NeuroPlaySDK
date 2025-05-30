@@ -145,7 +145,7 @@ class MainWindow(QMainWindow):
         self.comboDevices.addItem(deviceName)
 
     def on_spectrum_data(self, index, data):
-        self.spectrumPlots[index].setData(x=self.spectrums[index].timeX, y=data)
+        self.spectrumPlots[index].setData(x=self.spectrums[index].frequencies, y=data)
 
     def on_device_data(self, data):       
         n = len(data)
@@ -184,7 +184,7 @@ class MainWindow(QMainWindow):
                 self.spectrums.append(spec)
                 
                 spectrumPlot = pg.PlotWidget()
-                p2 = spectrumPlot.plot(x=spec.timeX, y=spec.spectrum, pen=(i,n))
+                p2 = spectrumPlot.plot(x=spec.frequencies, y=spec.spectrum, pen=(i,n))
                 spectrumPlot.setYRange(0, 20)
                 self.spectrumPlots.append(p2)
                 self.spectrumPlotters.append(spectrumPlot)
