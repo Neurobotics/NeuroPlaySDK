@@ -1,5 +1,6 @@
 
 from classes.BleConnector import BleConnector
+from classes.SpectumCalc import SpectrumCalc
 import asyncio
 import numpy as np
 from PySide6 import QtAsyncio
@@ -40,6 +41,19 @@ class MainWindow(QMainWindow):
         self.plotters = []
         self.plots = []
 
+        spectrumsHolder = QWidget()
+        spectrumsHolder.setMinimumSize(200, 200)
+        spectrumsHolder.setContentsMargins(0, 0, 0, 0)
+        self.spectrumsLayout = QVBoxLayout(spectrumsHolder)
+        self.spectrumsLayout.setContentsMargins(8, 8, 8, 8)
+        self.spectrumPlotters = []
+        self.spectrumPlots = []
+        self.spectrums = []
+
+        graphicsHolder = QHBoxLayout()
+        graphicsHolder.addWidget(plottersHolder, 100)
+        graphicsHolder.addWidget(spectrumsHolder, 50)
+
         self.spinSeconds = QSpinBox()
         self.spinSeconds.setRange(1, 100)
         self.spinSeconds.setValue(self.maxTime)
@@ -69,7 +83,7 @@ class MainWindow(QMainWindow):
         mainLayout.setContentsMargins(0, 0, 0, 0)
         mainLayout.setSpacing(0)
         mainLayout.addLayout(topRow, 0)
-        mainLayout.addWidget(plottersHolder, 100)
+        mainLayout.addLayout(graphicsHolder, 100)
 
         self.setCentralWidget(centralWidget)
 
@@ -130,6 +144,9 @@ class MainWindow(QMainWindow):
     def on_device_found(self, deviceName):
         self.comboDevices.addItem(deviceName)
 
+    def on_spectrum_data(self, index, data):
+        self.spectrumPlots[index].setData(x=self.spectrums[index].timeX, y=data)
+
     def on_device_data(self, data):       
         n = len(data)
         if len(self.samples) != n:
@@ -161,9 +178,26 @@ class MainWindow(QMainWindow):
                 self.plots.append(p)
                 self.plotters.append(plot)
                 self.plottersLayout.addWidget(plot)
+
+                spec = SpectrumCalc()
+                spec.index = i
+                self.spectrums.append(spec)
+                
+                spectrumPlot = pg.PlotWidget()
+                p2 = spectrumPlot.plot(x=spec.timeX, y=spec.spectrum, pen=(i,n))
+                spectrumPlot.setYRange(0, 20)
+                self.spectrumPlots.append(p2)
+                self.spectrumPlotters.append(spectrumPlot)
+                self.spectrumsLayout.addWidget(spectrumPlot)
+
+                spec.callback = self.on_spectrum_data
+
+
         
         for i in range(n):
             self.samples[i][self.dataIndex] = float(data[i])
+            self.spectrums[i].addData(float(data[i]))
+            # self.spectrums[i].addData(float(data[i]))
 
         self.dataIndex += 1
         if self.dataIndex >= self.sampleCount:
