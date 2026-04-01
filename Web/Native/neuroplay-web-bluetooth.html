@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Web Bluetooth Demo</title>
+
+<style>
+body { font-family: Arial; padding:20px }
+button { padding:10px }
+#devices li { cursor:pointer; margin:5px 0 }
+#log { 
+  border:1px solid #ccc; 
+  height:200px; 
+  overflow:auto; 
+  padding:10px;
+  white-space:pre;
+  font-family:monospace;
+}
+</style>
+</head>
+
+<body style="background: #333; color: white; margin: 0; padding: 0;">
+
+
+
+<canvas id="scope" style="position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; overflow: auto"></canvas>
+
+<div style="position: absolute; top: 20px; right: 20px;">
+<h2>BLE Scanner <button id="scanBtn">Scan Devices</button></h2>
+<ul id="devices"></ul>
+
+<label>
+Time window
+<select id="xscale" onchange="e => { scope.setSeconds(Number(e.target.value)); }">
+  <option value="2">2 s</option>
+  <option value="5" selected>5 s</option>
+  <option value="10">10 s</option>
+  <option value="20">20 s</option>
+</select>
+</label>
+<br>
+
+<label>
+Amplitude
+<input
+  type="range"
+  id="yscale"
+  min="0.0001"
+  max="0.01"
+  step="0.0001"
+  value="0.002"
+/>
+</label>
+
+<span id="yscaleValue"></span>
+
+<div id="log" style="background: #000; color: #3C0; height: 200px; display: none"></div>
+</div>
+
+<script>
+const DEVICE_NAME = "NeuroPlay";
+const SERVICE_UUID = "f0001298-0451-4000-b000-000000000000";
+const CHAR_DATA_UUID = "f0001299-0451-4000-b000-000000000000";
+const CHAR_CONTROL_UUID = "f000129a-0451-4000-b000-000000000000";
+
+const devicesList = document.getElementById("devices");
+const logDiv = document.getElementById("log");
+
+let device = null;
+let server = null;
+let lastCounter = null;
+let packetBuffer = [];
+const MAGIC_MICROVOLTS_BIT = 0.000186265;
+
+class BiquadFilter {
+
+  constructor(b0, b1, b2, a1, a2) {
+    this.b0 = b0;
+    this.b1 = b1;
+    this.b2 = b2;
+    this.a1 = a1;
+    this.a2 = a2;
+
+    this.z1 = 0;
+    this.z2 = 0;
+  }
+
+  process(x) {
+
+    const y = x * this.b0 + this.z1;
+
+    this.z1 = x * this.b1 + this.z2 - this.a1 * y;
+    this.z2 = x * this.b2 - this.a2 * y;
+
+    return y;
+  }
+
+}
+
+function createLPF40() {
+
+  const b0 = 0.6389455;
+  const b1 = 1.277891;
+  const b2 = 0.6389455;
+
+  const a1 = 1.1429805;
+  const a2 = 0.4128016;
+
+  return new BiquadFilter(b0, b1, b2, a1, a2);
+}
+
+function createHPF2() {
+
+  const b0 = 0.929349;
+  const b1 = -1.858698;
+  const b2 = 0.929349;
+
+  const a1 = -1.852146;
+  const a2 = 0.865251;
+
+  return new BiquadFilter(b0, b1, b2, a1, a2);
+}
+
+function createNotch50() {
+
+  const b0 = 0.9526;
+  const b1 = 1.5389;
+  const b2 = 0.9526;
+
+  const a1 = 1.5389;
+  const a2 = 0.9052;
+
+  return new BiquadFilter(b0, b1, b2, a1, a2);
+}
+
+const filters = [];
+
+for (let ch = 0; ch < 6; ch++) {
+  filters.push({
+    hp: createHPF2(),
+    notch: createNotch50(),
+    lp: createLPF40()
+  });
+}
+
+function filterSample(channels) {
+
+  const out = [];
+
+  for (let i = 0; i < channels.length; i++) {
+
+    let x = channels[i];
+
+    x = filters[i].hp.process(x);
+    x = filters[i].notch.process(x);
+    x = filters[i].lp.process(x);
+
+    out.push(x);
+  }
+
+  return out;
+}
+
+function parsePacket(bytes) {
+
+  const counter = bytes[0] | (bytes[1] << 8);
+
+  const channels = [];
+
+  for (let ch = 0; ch < 6; ch++) {
+
+    const i = 2 + ch * 3;
+
+    let value =
+      bytes[i] |
+      (bytes[i + 1] << 8) |
+      (bytes[i + 2] << 16);
+
+    // sign extend int24
+    if (value & 0x800000) {
+      value |= 0xFF000000;
+    }
+
+    channels.push(value * MAGIC_MICROVOLTS_BIT);
+  }
+
+  return {
+    counter,
+    channels
+  };
+}
+
+
+
+function log(msg) {
+  logDiv.textContent += msg + "\n";
+  logDiv.scrollTop = logDiv.scrollHeight;
+}
+
+function toHex(buffer) {
+  const arr = new Uint8Array(buffer);
+  return Array.from(arr)
+    .map(b => b.toString(16).padStart(2, "0"))
+    .join(" ");
+}
+
+document.getElementById("scanBtn").onclick = async () => {
+
+  devicesList.innerHTML = "";
+
+  try {
+
+    const dev = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: [SERVICE_UUID]
+    });
+
+    if (!dev.name || !dev.name.includes(DEVICE_NAME)) {
+      alert("Device does not match filter");
+      return;
+    }
+
+    const li = document.createElement("li");
+    li.textContent = dev.name + " (" + dev.id + ")";
+    li.onclick = () => connectDevice(dev);
+
+    devicesList.appendChild(li);
+
+  } catch (err) {
+    log("Scan error: " + err);
+  }
+};
+
+async function connectDevice(dev) {
+
+  try {
+
+    device = dev;
+    log("Connecting to " + device.name);
+
+    server = await device.gatt.connect();
+
+    const service = await server.getPrimaryService(SERVICE_UUID);
+
+    const dataChar = await service.getCharacteristic(CHAR_DATA_UUID);
+    const controlChar = await service.getCharacteristic(CHAR_CONTROL_UUID);
+
+    await dataChar.startNotifications();
+
+    dataChar.addEventListener("characteristicvaluechanged", event => {
+      const value = event.target.value.buffer;
+      // log("RX: " + toHex(value));
+	  processIncoming(event.target.value);
+    });
+
+    log("Notifications started");
+
+    const cmd = new Uint8Array([0x02, 0x01]);
+    await controlChar.writeValue(cmd);
+
+    log("Control command sent");
+
+  } catch (err) {
+    log("Connection error: " + err);
+  }
+}
+
+class SignalScope {
+
+  constructor(canvas, options = {}) {
+
+    this.canvas = canvas;
+    this.ctx = canvas.getContext("2d");
+
+    this.channels = options.channels ?? 6;
+    this.sampleRate = options.sampleRate ?? 125;
+    this.seconds = options.seconds ?? 5;
+
+    this.yScale = options.yScale ?? 1;
+
+    this.showTimeAxis = options.timeAxis ?? true;
+
+    this.colors =
+      options.colors ??
+      ["#ff4040","#40ff40","#4080ff","#ffaa00","#00ffff","#ff00ff"];
+
+    this.samplesPerScreen =
+      Math.floor(this.sampleRate * this.seconds);
+
+    this.buffer = [];
+
+    for (let i = 0; i < this.channels; i++)
+      this.buffer.push(new Float32Array(this.samplesPerScreen));
+
+    this.writeIndex = 0;
+  }
+
+  setSeconds(seconds) {
+
+    this.seconds = seconds;
+    this.samplesPerScreen =
+      Math.floor(this.sampleRate * seconds);
+
+    for (let i = 0; i < this.channels; i++)
+      this.buffer[i] =
+        new Float32Array(this.samplesPerScreen);
+
+    this.writeIndex = 0;
+  }
+
+  setYScale(scale) {
+    this.yScale = scale;
+  }
+
+  addSample(values) {
+
+    for (let ch = 0; ch < this.channels; ch++)
+      this.buffer[ch][this.writeIndex] = values[ch];
+
+    this.writeIndex++;
+
+    if (this.writeIndex >= this.samplesPerScreen)
+      this.writeIndex = 0;
+  }
+
+  drawGrid() {
+	
+    const ctx = this.ctx;
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+
+    ctx.strokeStyle = "#333";
+    ctx.lineWidth = 1;
+
+    const rowHeight = h / this.channels;
+
+    for (let ch = 0; ch <= this.channels; ch++) {
+
+      const y = ch * rowHeight;
+
+      ctx.beginPath();
+      ctx.moveTo(0,y);
+      ctx.lineTo(w,y);
+      ctx.stroke();
+    }
+
+    if (!this.showTimeAxis)
+      return;
+
+    const seconds = this.seconds;
+
+    for (let s = 0; s <= seconds; s++) {
+
+      const x = w - (s/seconds)*w;
+
+      ctx.beginPath();
+      ctx.moveTo(x,0);
+      ctx.lineTo(x,h);
+      ctx.stroke();
+
+      ctx.fillStyle="#aaa";
+      ctx.font="12px sans-serif";
+      ctx.fillText("-"+s+"s",x+3,h-5);
+    }
+  }
+
+  draw() {
+	this.resize();
+    const ctx = this.ctx;
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+
+    ctx.clearRect(0,0,w,h);
+
+    this.drawGrid();
+
+    const rowHeight = h / this.channels;
+	console.log(this.channels, rowHeight, h)
+
+    for (let ch = 0; ch < this.channels; ch++) {
+
+      const mid = rowHeight*(ch+0.5);
+
+      ctx.strokeStyle =
+        this.colors[ch % this.colors.length];
+
+      ctx.lineWidth = 2;
+
+      ctx.beginPath();
+
+      let prevX = 0;
+      let prevY = mid;
+
+      for (let i=0;i<this.samplesPerScreen;i++) {
+
+        const index =
+          (this.writeIndex + i) %
+          this.samplesPerScreen;
+
+        const x = (i/this.samplesPerScreen)*w;
+
+        const y =
+          mid -
+          this.buffer[ch][index] *
+          this.yScale *
+          rowHeight *
+          0.45;
+
+        if (i === 0)
+          ctx.moveTo(x,y);
+        else {
+
+          const cx = (prevX + x)/2;
+
+          ctx.quadraticCurveTo(
+            prevX, prevY,
+            cx, (prevY+y)/2
+          );
+
+        }
+
+        prevX = x;
+        prevY = y;
+      }
+
+      ctx.stroke();
+    }
+  }
+  
+  resize() {
+	  const rect = this.canvas.getBoundingClientRect();
+
+	  const dpr = 1; // window.devicePixelRatio || 1;
+
+	  const width = Math.floor(rect.width * dpr);
+	  const height = Math.floor(rect.height * dpr);
+
+	  if (this.canvas.width !== width || this.canvas.height !== height) {
+		this.canvas.width = width;
+		this.canvas.height = height;
+		this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+	  }
+	}
+
+}
+
+const scope = new SignalScope(
+  document.getElementById("scope"),
+  {
+    channels: 6,
+    sampleRate: 125,
+    seconds: 5,
+    yScale: 0.002,
+
+    timeAxis: true,
+
+    colors: [
+      "#ff5050",
+      "#50ff50",
+      "#5090ff",
+      "#ffaa00",
+      "#00e0ff",
+      "#ff50ff"
+    ]
+  }
+);
+
+function processIncoming(dataView) {
+
+  const bytes = new Uint8Array(dataView.buffer);
+
+  for (let b of bytes) {
+    packetBuffer.push(b);
+  }
+
+  while (packetBuffer.length >= 20) {
+
+    const packet = packetBuffer.slice(0, 20);
+    packetBuffer = packetBuffer.slice(20);
+
+    const parsed = parsePacket(packet);
+	
+	if (lastCounter !== null && parsed.counter !== (lastCounter + 1) % 65536) {
+		  log("Packet loss detected!");
+	  }
+
+	  lastCounter = parsed.counter;
+	
+	const filtered = filterSample(parsed.channels);
+	
+	let oo = '';
+	filtered.forEach(v => {
+		oo += v.toFixed(0) + " ";
+	})
+	// log(oo);
+	
+	scope.addSample(filtered);
+
+    /* log(
+      "CNT " + parsed.counter +
+      " | " +
+      parsed.channels.join(", ")
+    ); */
+  }
+}
+
+const ySlider = document.getElementById("yscale");
+const yValue = document.getElementById("yscaleValue");
+
+function updateY() {
+
+  const v = Number(ySlider.value);
+
+  scope.setYScale(v);
+
+  yValue.textContent = v.toFixed(4);
+}
+
+ySlider.addEventListener("input", updateY);
+
+updateY();
+
+function animate() {
+
+  scope.draw();
+
+  requestAnimationFrame(animate);
+}
+
+animate();
+
+</script>
+
+</body>
+</html>

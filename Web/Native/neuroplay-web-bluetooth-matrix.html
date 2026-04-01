@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>NeuroPlay Web Bluetooth Demo</title>
+<style>
+body { font-family: Arial; padding:20px }
+* { font-family:monospace; overflow: hidden; }
+button { padding: 2px; background: none; border: 0; margin: 0; }
+#devices li { cursor:pointer; margin:5px 0 }
+#log { 
+  overflow:auto; 
+  padding:10px;
+  white-space:pre;
+  
+}
+.matrix-text {
+  font-size: 2.5vw !important;
+  color: #00ff41;
+  text-shadow:
+    0 0 5px #00ff41,
+    0 0 10px #00ff41,
+    0 0 20px #00ff41;
+}
+</style>
+</head>
+
+<body style="background: #333; color: white">
+
+
+
+<div id="log" class="matrix-text" style="background: #000; border: 0; position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; overflow: auto;"><span id="typing"></span><span id="pick" style="display: none">Wake up, <button id="scanBtn" class="matrix-text">NeuroPlay</button></span>
+</div>
+
+<div style="position: absolute; top: 0; left: 0;">
+<ul id="devices"></ul>
+</div>
+
+<!--div style="position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: url('back.png') repeat; pointer-events: none; background-size: 10px;">
+</div-->
+
+<script>
+const DEVICE_NAME = "NeuroPlay";
+const SERVICE_UUID = "f0001298-0451-4000-b000-000000000000";
+const CHAR_DATA_UUID = "f0001299-0451-4000-b000-000000000000";
+const CHAR_CONTROL_UUID = "f000129a-0451-4000-b000-000000000000";
+
+const devicesList = document.getElementById("devices");
+const logDiv = document.getElementById("log");
+
+let device = null;
+let server = null;
+
+function log(msg) {
+  logDiv.textContent += msg + "\n";
+  logDiv.scrollTop = logDiv.scrollHeight;
+}
+
+function toHex(buffer) {
+  const arr = new Uint8Array(buffer);
+  return Array.from(arr)
+    .map(b => b.toString(16).padStart(2, "0"))
+    .join(" ");
+}
+
+document.getElementById("scanBtn").onclick = async () => {
+
+  devicesList.innerHTML = "";
+
+  try {
+
+    const dev = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: [SERVICE_UUID]
+    });
+
+    if (!dev.name || !dev.name.includes(DEVICE_NAME)) {
+      alert("Device does not match filter");
+      return;
+    }
+
+    //const li = document.createElement("li");
+    // li.textContent = dev.name + " (" + dev.id + ")";
+    //li.onclick = () => connectDevice(dev);
+
+    // devicesList.appendChild(li);
+	
+	connectDevice(dev);
+
+  } catch (err) {
+    log("Scan error: " + err);
+  }
+};
+
+async function connectDevice(dev) {
+
+  try {
+
+    device = dev;
+    log("Connecting to " + device.name);
+
+    server = await device.gatt.connect();
+
+    const service = await server.getPrimaryService(SERVICE_UUID);
+
+    const dataChar = await service.getCharacteristic(CHAR_DATA_UUID);
+    const controlChar = await service.getCharacteristic(CHAR_CONTROL_UUID);
+
+    await dataChar.startNotifications();
+
+    dataChar.addEventListener("characteristicvaluechanged", event => {
+      const value = event.target.value.buffer;
+      log(toHex(value));
+    });
+
+    log("Notifications started");
+
+    const cmd = new Uint8Array([0x02, 0x01]);
+    await controlChar.writeValue(cmd);
+
+    log("Control command sent");
+
+  } catch (err) {
+    log("Connection error: " + err);
+  }
+}
+
+function typeText(element, text, speed = 200) {
+  let i = 0;
+
+  function typing() {
+    if (i <= text.length) {
+      element.innerHTML += text.charAt(i);
+      i++;
+      setTimeout(typing, Math.random()*speed / 10 + speed);
+    } else {
+	  element.style.display = 'none'
+	  document.getElementById("pick").style.display = 'block'
+	}
+  }
+
+  typing();
+}
+
+const el = document.getElementById("typing");
+typeText(el, "Wake up, Ne", 300);
+</script>
+
+</body>
+</html>
