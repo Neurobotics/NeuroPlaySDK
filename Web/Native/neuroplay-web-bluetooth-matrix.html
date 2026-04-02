@@ -22,8 +22,7 @@
 	</head>
 
 	<body style="background: #333; color: white">
-		<div id="log" class="matrix-text" style="background: #000; border: 0; position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; overflow: auto;"><span id="typing" class="large"></span><span id="pick" style="display: none" class="large">Wake up, <button id="scanBtn" class="matrix-text large" style="padding: 0; margin: 0;">NeuroPlay</button></span>
-		</div>
+		<div id="log" class="matrix-text" style="background: #000; border: 0; position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; overflow: auto;"><div style="padding-left: 50px; padding-top: 40px"><span id="typing" class="large"><span style="animation: glowAnimation 1s infinite;" class="large" id="cons">_</span></span><span id="pick" style="display: none" class="large">Wake up, <button id="scanBtn" class="matrix-text large" style="padding: 0; margin: 0;">NeuroPlay</button></span></div></div>
 
 		<script>
 			const DEVICE_NAME = "NeuroPlay"
@@ -112,7 +111,7 @@
 						element.innerHTML += text.charAt(i)
 						i++
 						setTimeout(typing, Math.random()*speed / 10 + speed)
-						} else {
+					} else {
 						element.style.display = 'none'
 						document.getElementById("pick").style.display = 'block'
 					}
@@ -120,7 +119,10 @@
 				typing()
 			}
 			const el = document.getElementById("typing")
-			typeText(el, "Wake up, Ne...", 300)
+			setTimeout(() => {
+				document.getElementById("cons").style.display = 'none'
+				typeText(el, "Wake up, Ne...", 300)
+			}, 2000)
 		</script>
 	</body>
 </html>
