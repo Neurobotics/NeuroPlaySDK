@@ -58,57 +58,123 @@
 			let packetBuffer = []
 			const MAGIC_MICROVOLTS_BIT = 0.000186265
 
-			class BiquadFilter {
-				constructor(b0, b1, b2, a1, a2) {
-					this.b0 = b0
-					this.b1 = b1
-					this.b2 = b2
-					this.a1 = a1
-					this.a2 = a2
+			class Biquad {
+			    constructor({
+				type = "lowpass",   // "lowpass" | "highpass" | "notch"
+				frequency = 10,
+				sampleRate = 125,
+				order = 2,
+				Q = null           // optional (used for notch)
+			  }) {
 
-					this.z1 = 0
-					this.z2 = 0
-				}
-				process(x) {
-					const y = x * this.b0 + this.z1
-					this.z1 = x * this.b1 + this.z2 - this.a1 * y
-					this.z2 = x * this.b2 - this.a2 * y
-					return y
+				this.type = type;
+				this.fs = sampleRate;
+				this.fc = frequency;
+				this.order = order;
+
+				// Default Q values
+				if (Q) {
+				  this.Q = Q;
+				} else {
+				  this.Q = (type === "notch") ? 20 : Math.SQRT1_2;
 				}
 
+				this.z1 = 0;
+				this.z2 = 0;
+
+				this._design();
+			  }
+
+			  _design() {
+
+				const w0 = 2 * Math.PI * this.fc / this.fs;
+				const cos = Math.cos(w0);
+				const sin = Math.sin(w0);
+
+				const Q = this.Q;
+				const alpha = sin / (2 * Q);
+
+				let b0, b1, b2, a0, a1, a2;
+
+				if (this.type === "lowpass") {
+
+				  b0 = (1 - cos) / 2;
+				  b1 = 1 - cos;
+				  b2 = (1 - cos) / 2;
+
+				  a0 = 1 + alpha;
+				  a1 = -2 * cos;
+				  a2 = 1 - alpha;
+
+				} else if (this.type === "highpass") {
+
+				  b0 = (1 + cos) / 2;
+				  b1 = -(1 + cos);
+				  b2 = (1 + cos) / 2;
+
+				  a0 = 1 + alpha;
+				  a1 = -2 * cos;
+				  a2 = 1 - alpha;
+
+				} else if (this.type === "notch") {
+
+				  // Notch (band-stop)
+				  b0 = 1;
+				  b1 = -2 * cos;
+				  b2 = 1;
+
+				  a0 = 1 + alpha;
+				  a1 = -2 * cos;
+				  a2 = 1 - alpha;
+
+				} else {
+				  throw new Error("Unsupported filter type");
+				}
+
+				// normalize
+				this.b0 = b0 / a0;
+				this.b1 = b1 / a0;
+				this.b2 = b2 / a0;
+				this.a1 = a1 / a0;
+				this.a2 = a2 / a0;
+			  }
+
+			  process(x) {
+
+				const y = this.b0 * x + this.z1;
+
+				this.z1 = this.b1 * x - this.a1 * y + this.z2;
+				this.z2 = this.b2 * x - this.a2 * y;
+
+				return y;
+			  }
 			}
 
 			function createLPF40() {
-				const b0 = 0.6389455
-				const b1 = 1.277891
-				const b2 = 0.6389455
-
-				const a1 = 1.1429805
-				const a2 = 0.4128016
-
-				return new BiquadFilter(b0, b1, b2, a1, a2)
+				return new Biquad({
+				  type: "lowpass",
+				  frequency: 40,
+				  sampleRate: 125,
+				  order: 2
+				})
 			}
 
 			function createHPF2() {
-				const b0 = 0.929349
-				const b1 = -1.858698
-				const b2 = 0.929349
-
-				const a1 = -1.852146
-				const a2 = 0.865251
-
-				return new BiquadFilter(b0, b1, b2, a1, a2)
+				return new Biquad({
+				  type: "highpass",
+				  frequency: 2,
+				  sampleRate: 125,
+				  order: 2
+				})
 			}
 
 			function createNotch50() {
-				const b0 = 0.9526
-				const b1 = 1.5389
-				const b2 = 0.9526
-
-				const a1 = 1.5389
-				const a2 = 0.9052
-
-				return new BiquadFilter(b0, b1, b2, a1, a2)
+				return new Biquad({
+				  type: "notch",
+				  frequency: 50,
+				  sampleRate: 125,
+				  Q: 20   // try 10–30 depending on width
+				})
 			}
 
 			const filters = []
