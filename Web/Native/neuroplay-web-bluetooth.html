@@ -200,19 +200,18 @@
 				return out
 			}
 
-			function parsePacket(bytes) {
+			function parsePacket(bytes) {				
 				const counter = bytes[0] | (bytes[1] << 8)
 				const channels = []
+				let i = 2
 				for (let ch = 0; ch < 6; ch++) {
-					const i = 2 + ch * 3
-					let value = bytes[i] | (bytes[i + 1] << 8) | (bytes[i + 2] << 16)
+					let value = (bytes[i++] << 16) | (bytes[i++] << 8) | (bytes[i++])
 
 					if (value & 0x800000) { // sign extend int24
 						value |= 0xFF000000
 					}
 					channels.push(value * MAGIC_MICROVOLTS_BIT)
 				}
-
 				return {
 					counter,
 					channels
