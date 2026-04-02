@@ -264,7 +264,6 @@
 
 					dataChar.addEventListener("characteristicvaluechanged", event => {
 						const value = event.target.value.buffer
-						// log("RX: " + toHex(value))
 						processIncoming(event.target.value)
 					})
 
@@ -313,23 +312,21 @@
 					this.samplesPerScreen =
 					Math.floor(this.sampleRate * seconds)
 
-					for (let i = 0; i < this.channels; i++)
-					this.buffer[i] =
-					new Float32Array(this.samplesPerScreen)
-
+					for (let i = 0; i < this.channels; i++) {
+						this.buffer[i] = new Float32Array(this.samplesPerScreen)
+					}
 					this.writeIndex = 0
 				}
 
 				setYScale(scale) {
-					this.yScale = scale
+					this.yScale = scale * 1000
 				}
 
 				addSample(values) {
-					for (let ch = 0; ch < this.channels; ch++)
-					this.buffer[ch][this.writeIndex] = values[ch]
-
+					for (let ch = 0; ch < this.channels; ch++) {
+						this.buffer[ch][this.writeIndex] = values[ch]
+					}
 					this.writeIndex++
-
 					if (this.writeIndex >= this.samplesPerScreen)
 					this.writeIndex = 0
 				}
@@ -478,7 +475,6 @@
 					lastCounter = parsed.counter
 
 					const filtered = filterSample(parsed.channels)
-
 					scope.addSample(filtered)
 				}
 			}
@@ -489,7 +485,7 @@
 			function updateY() {
 				const v = Number(ySlider.value)
 				scope.setYScale(v)
-				yValue.textContent = (v * 1000).toFixed(2) + ' mV/px'
+				yValue.textContent = (v * 1000).toFixed(2) + ' uV/px'
 			}
 			
 			function updateXscale() {
