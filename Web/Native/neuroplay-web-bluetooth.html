@@ -20,31 +20,29 @@
 
 	<body style="background: #333; color: white; margin: 0; padding: 0;">
 		<canvas id="scope" style="position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; overflow: auto"></canvas>
-
-		<div style="position: absolute; top: 20px; right: 20px;">
-			<h2>BLE Scanner <button id="scanBtn">Scan Devices</button></h2>
-			<ul id="devices"></ul>
-
-			<label>
-				Time window
-				<select id="xscale" onchange="e => { scope.setSeconds(Number(e.target.value)); }">
-					<option value="2">2 s</option>
-					<option value="5" selected>5 s</option>
-					<option value="10">10 s</option>
-					<option value="20">20 s</option>
-				</select>
-			</label>
-			<br>
-
-			<label>
-				Amplitude
-				<input type="range" id="yscale" min="0.0001" max="0.01" step="0.0001" value="0.002"	/>
-			</label>
-
-			<span id="yscaleValue"></span>
-
-			<div id="log" style="background: #000; color: #3C0; height: 200px; display: none"></div>
+		
+		<div style="position: absolute; top: 10px; left: 10px;">
+		<button id="scanBtn">Connect</button>
 		</div>
+		
+		<div style="position: absolute; top: 10px; right: 10px; text-align: right; font-size: 20px; line-height: 24px">
+					<div style="display: inline-block; margin-left: 10px; vertical-align: top">↔
+				
+					<select id="xscale" onchange="updateXscale()">
+						<option value="2">2 s</option>
+						<option value="5" selected>5 s</option>
+						<option value="10">10 s</option>
+						<option value="20">20 s</option>
+					</select>
+					</div>
+	
+				<div style="display: inline-block; margin-left: 10px;">↕
+				<input type="range" id="yscale" min="0.0001" max="0.01" step="0.0001" value="0.002"	style="margin-top: 4px;"/><br>
+				<span id="yscaleValue" style="opacity: 0.7; font-size: 10px; line-height: 12px"></span>
+				</div>
+		</div>
+		
+		<div id="log" style="background: #000; color: #3C0; height: 200px; display: none"></div>
 
 		<script>
 			const DEVICE_NAME = "NeuroPlay"
@@ -52,7 +50,6 @@
 			const CHAR_DATA_UUID = "f0001299-0451-4000-b000-000000000000"
 			const CHAR_CONTROL_UUID = "f000129a-0451-4000-b000-000000000000"
 
-			const devicesList = document.getElementById("devices")
 			const logDiv = document.getElementById("log")
 
 			let device = null
@@ -168,7 +165,6 @@
 			}
 
 			document.getElementById("scanBtn").onclick = async () => {
-				devicesList.innerHTML = ""
 				try {
 					const dev = await navigator.bluetooth.requestDevice({
 						acceptAllDevices: true,
@@ -179,12 +175,7 @@
 						alert("Device does not match filter")
 						return
 					}
-
-					const li = document.createElement("li")
-					li.textContent = dev.name + " (" + dev.id + ")"
-					li.onclick = () => connectDevice(dev)
-
-					devicesList.appendChild(li)
+					connectDevice(dev)
 
 					} catch (err) {
 					log("Scan error: " + err)
@@ -322,7 +313,6 @@
 					this.drawGrid()
 
 					const rowHeight = h / this.channels
-					console.log(this.channels, rowHeight, h)
 
 					for (let ch = 0; ch < this.channels; ch++) {
 						const mid = rowHeight*(ch+0.5)
@@ -430,11 +420,16 @@
 
 			const ySlider = document.getElementById("yscale")
 			const yValue = document.getElementById("yscaleValue")
-
+			const xValue = document.getElementById("xscale")
 			function updateY() {
 				const v = Number(ySlider.value)
 				scope.setYScale(v)
-				yValue.textContent = v.toFixed(4)
+				yValue.textContent = (v * 1000).toFixed(2) + ' mV/px'
+			}
+			
+			function updateXscale() {
+				const v = Number(xValue.value)
+				scope.setSeconds(v);
 			}
 
 			ySlider.addEventListener("input", updateY)
