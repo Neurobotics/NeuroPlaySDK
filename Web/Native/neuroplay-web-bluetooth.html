@@ -233,7 +233,9 @@
 			document.getElementById("scanBtn").onclick = async () => {
 				try {
 					const dev = await navigator.bluetooth.requestDevice({
-						acceptAllDevices: true,
+						filters: [
+							{ namePrefix: "NeuroPlay" }
+						],
 						optionalServices: [SERVICE_UUID]
 					})
 
