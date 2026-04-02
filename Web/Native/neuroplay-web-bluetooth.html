@@ -51,6 +51,7 @@
 			const CHAR_CONTROL_UUID = "f000129a-0451-4000-b000-000000000000"
 
 			const logDiv = document.getElementById("log")
+			const channelNames = ["O1", "T3", "Fp1", "Fp2", "T4", "02"]
 
 			let device = null
 			let server = null
@@ -339,17 +340,20 @@
 					const w = this.canvas.width
 					const h = this.canvas.height
 
-					ctx.strokeStyle = "#333"
+					ctx.strokeStyle = "#666"
 					ctx.lineWidth = 1
+					ctx.setLineDash([10, 5]);
 
 					const rowHeight = h / this.channels
-
-					for (let ch = 0; ch <= this.channels; ch++) {
-						const y = ch * rowHeight
+					ctx.fillStyle="#aaa"
+					ctx.font="12px sans-serif"
+					for (let ch = 0; ch < this.channels; ch++) {
+						const y = (ch + 0.5) * rowHeight
 						ctx.beginPath()
 						ctx.moveTo(0,y)
 						ctx.lineTo(w,y)
 						ctx.stroke()
+						ctx.fillText(channelNames[ch], 2, y)
 					}
 
 					if (!this.showTimeAxis) return
@@ -362,10 +366,10 @@
 						ctx.moveTo(x,0)
 						ctx.lineTo(x,h)
 						ctx.stroke()
-						ctx.fillStyle="#aaa"
-						ctx.font="12px sans-serif"
 						ctx.fillText("-"+s+"s",x+3,h-5)
 					}
+					
+					ctx.setLineDash([]);
 				}
 
 				draw() {
@@ -476,10 +480,6 @@
 
 					const filtered = filterSample(parsed.channels)
 
-					let oo = ''
-					filtered.forEach(v => {
-						oo += v.toFixed(0) + " "
-					})
 					scope.addSample(filtered)
 				}
 			}
